@@ -40,5 +40,10 @@ func (w *lineSplitter) Write(p []byte) (int, error) {
 		return i, err
 	}
 
+	// Write line break
+	if i, err := w.w.Write([]byte("\r\n")); err != nil {
+		return i, err
+	}
+	
 	return (len(p) + (breaks * 2)), nil
 }
