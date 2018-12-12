@@ -1,6 +1,8 @@
 package mailyak
 
 import (
+	"errors"
+	"net"
 	"bytes"
 	"fmt"
 	"net/smtp"
@@ -75,10 +77,27 @@ func (m *MailYak) Send() error {
 	)
 }
 
-// SendMail attempts to provide a more featureful version of the Send command
+// SendWithHello is a modified version of mailyak.Send() which supports a hello/helo/ehlo call
+func (m *MailYak) SendWithHello(helobox string) error {
+	buf, err := m.buildMime()
+	if err != nil {
+		return err
+	}
+
+	return sendMail(
+		m.host,
+		m.auth,
+		m.fromAddr,
+		append(append(m.toAddrs, m.ccAddrs...), m.bccAddrs...),
+		buf.Bytes(),
+		helobox,
+	)
+}
+// sendMail attempts to provide a more featureful version of the Send command
 //
-// Goal is to allow low level adjustments, such as setting the HELO response
-func (m *MailYak) SendMail(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+// Goal is to allow low level adjustments, such as setting the HELO response. 
+// n.b. silently ignores AUTH right now, nor does TLS.
+func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte, helobox string) error {
 	if err := validateLine(from); err != nil {
 		return err
 	}
@@ -87,57 +106,46 @@ func (m *MailYak) SendMail(addr string, a smtp.Auth, from string, to []string, m
 			return err
 		}
 	}
-	c, err := smtp.Dial(addr)
+
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
-	if err := c.Hello("UMF-FW1.um.maine.edu"); err != nil {
+
+	host, _, _ := net.SplitHostPort(addr)
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
 		return err
 	}
-	
-	//if err = c.hello(); err != nil {
-	//	return err
-	//}
-
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		config := &tls.Config{ServerName: c.serverName}
-		if testHookStartTLS != nil {
-			testHookStartTLS(config)
-		}
-		if err = c.StartTLS(config); err != nil {
-			return err
-		}
+	defer client.Close()
+	err = client.Hello(helobox)
+	if err != nil {
+		return err
 	}
-	if a != nil && c.ext != nil {
-		if _, ok := c.ext["AUTH"]; !ok {
-			return errors.New("smtp: server doesn't support AUTH")
-		}
-		if err = c.Auth(a); err != nil {
-			return err
-		}
-	}
-	if err = c.Mail(from); err != nil {
+	if err = client.Mail(from); err != nil {
 		return err
 	}
 	for _, addr := range to {
-		if err = c.Rcpt(addr); err != nil {
+		if err = client.Rcpt(addr); err != nil {
 			return err
 		}
 	}
-	w, err := c.Data()
+
+	w , err := client.Data()
 	if err != nil {
 		return err
 	}
+
 	_, err = w.Write(msg)
 	if err != nil {
 		return err
 	}
+	
 	err = w.Close()
 	if err != nil {
 		return err
 	}
-	return c.Quit()
+	return client.Quit()
 }
 
 // MimeBuf returns the buffer containing all the RAW MIME data.
