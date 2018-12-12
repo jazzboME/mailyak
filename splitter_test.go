@@ -72,12 +72,13 @@ func TestLineSplitterWrite(t *testing.T) {
 				"UwEAANABAABQSwECHgMUAAkACABmbc9ItPhx3VMBAADQAQAALQAYAAAAAAAB\r\n" +
 				"AAAAtIEAAAAAZGVhbF82OTAwMjRfMjAxNi0wNi0xNS0xMzQzX2xhdGVzdF9v\r\n" +
 				"cmRlcnMuY3N2VVQFAANfTWFXdXgLAAEE6AMAAAToAwAAUEsFBgAAAAABAAEA\r\n" +
-				"cwAAAMoBAAAAAA==",
+				"cwAAAMoBAAAA\r\n" +
+				"AA==\r\n",
 		},
 		{
 			"test",
 			[]byte("test"),
-			"dGVzdA==",
+			"dGVz\r\n" + "dA==\r\n",
 		},
 		{
 			"sentance",
@@ -89,7 +90,8 @@ func TestLineSplitterWrite(t *testing.T) {
 				"dGVhciBvbiB0aGUgY2hlZWsgb2YgYSBnb2xkZW4gY2hpbGQuIEJ1dCBwZXJz\r\n" +
 				"b25hbGx5LCBJJ2QgbXVkLXdyZXN0bGUgbXkgb3duIG1vdGhlciBmb3IgYSB0\r\n" +
 				"b24gb2YgY2FzaCwgYW4gYW11c2luZyBjbG9jayBhbmQgYSBzYWNrIG9mIEZy\r\n" +
-				"ZW5jaCBwb3JuLg==",
+				"ZW5jaCBwb3Ju\r\n" +
+				"Lg==\r\n",
 		},
 		{
 			"test.png",

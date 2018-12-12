@@ -1,6 +1,7 @@
 package mailyak
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"net/textproto"
@@ -973,6 +974,105 @@ func TestMailYakWriteAttachments_multipleAttachments(t *testing.T) {
 				if !bytes.Equal(want.data.Bytes(), got.data.Bytes()) {
 					t.Errorf("%q. MailYak.writeAttachments() data = %v, want %v", tt.name, want.data.String(), got.data.String())
 				}
+			}
+		})
+	}
+}
+
+func TestMailYakWriteAttachments_lineSplitter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		// Test description.
+		name string
+		// Receiver fields.
+		rattachments []attachment
+		// Expected results.
+		ctype   string
+		disp    string
+		data    string
+		wantErr bool
+	}{
+		{
+			"Attachment > 512, split to lines of 60 or less",
+			[]attachment{
+				{
+					"qed.txt",
+					strings.NewReader(
+						`Now it is such a bizarrely improbable coincidence that anything so mind-bogglingly ` +
+							`useful could have evolved purely by chance that some thinkers have chosen to see it ` +
+							`as the final and clinching proof of the non-existence of God. The argument goes something ` +
+							`like this: "I refuse to prove that I exist," says God, "for proof denies faith, and ` +
+							`without faith I am nothing." "But," says Man, "The Babel fish is a dead giveaway, ` +
+							`isn't it? It could not have evolved by chance. It proves you exist, and so therefore, ` +
+							`by your own arguments, you don't. QED." "Oh dear," says God, "I hadn't thought of ` +
+							`that," and promptly vanishes in a puff of logic. "Oh, that was easy," says Man, and ` +
+							`for an encore goes on to prove that black is white and gets himself killed on the next ` +
+							`zebra crossing.`,
+					),
+					false,
+					"",
+				},
+			},
+			"text/plain; charset=utf-8;\n\tfilename=\"qed.txt\"",
+			"attachment;\n\tfilename=\"qed.txt\"",
+			"Tm93IGl0IGlzIHN1Y2ggYSBiaXphcnJlbHkgaW1wcm9iYWJsZSBjb2luY2lk\r\n" +
+                "ZW5jZSB0aGF0IGFueXRoaW5nIHNvIG1pbmQtYm9nZ2xpbmdseSB1c2VmdWwg\r\n" +
+                "Y291bGQgaGF2ZSBldm9sdmVkIHB1cmVseSBieSBjaGFuY2UgdGhhdCBzb21l\r\n" +
+                "IHRoaW5rZXJzIGhhdmUgY2hvc2VuIHRvIHNlZSBpdCBhcyB0aGUgZmluYWwg\r\n" +
+                "YW5kIGNsaW5jaGluZyBwcm9vZiBvZiB0aGUgbm9uLWV4aXN0ZW5jZSBvZiBH\r\n" +
+                "b2QuIFRoZSBhcmd1bWVudCBnb2VzIHNvbWV0aGluZyBsaWtlIHRoaXM6ICJJ\r\n" +
+                "IHJlZnVzZSB0byBwcm92ZSB0aGF0IEkgZXhpc3QsIiBzYXlzIEdvZCwgImZv\r\n" +
+                "ciBwcm9vZiBkZW5pZXMgZmFpdGgsIGFuZCB3aXRob3V0IGZhaXRoIEkgYW0g\r\n" +
+                "bm90aGluZy4iICJCdXQsIiBzYXlzIE1hbiwgIlRoZSBCYWJlbCBmaXNoIGlz\r\n" +
+                "IGEgZGVhZCBnaXZlYXdheSwgaXNuJ3QgaXQ/IEl0IGNvdWxkIG5vdCBoYXZl\r\n" +
+                "IGV2b2x2ZWQgYnkgY2hhbmNlLiBJdCBwcm92ZXMgeW91IGV4aXN0LCBhbmQg\r\n" +
+				"c28gdGhlcmVmb3JlLCBi\r\n" +
+				"eSB5\r\n" +
+				"b3VyIG93biBhcmd1bWVudHMsIHlvdSBkb24ndC4gUUVELiIgIk9oIGRlYXIs\r\n" +
+                "IiBzYXlzIEdvZCwgIkkgaGFkbid0IHRob3VnaHQgb2YgdGhhdCwiIGFuZCBw\r\n" +
+                "cm9tcHRseSB2YW5pc2hlcyBpbiBhIHB1ZmYgb2YgbG9naWMuICJPaCwgdGhh\r\n" +
+                "dCB3YXMgZWFzeSwiIHNheXMgTWFuLCBhbmQgZm9yIGFuIGVuY29yZSBnb2Vz\r\n" +
+                "IG9uIHRvIHByb3ZlIHRoYXQgYmxhY2sgaXMgd2hpdGUgYW5kIGdldHMgaGlt\r\n" +
+                "c2VsZiBraWxsZWQgb24gdGhlIG5leHQgemVicmEgY3Jvc3Npbmcu\r\n",
+			false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := MailYak{attachments: tt.rattachments}
+			pc := testPartCreator{}
+
+			// use actual lineSplitter rather than nopSplitter
+			if err := m.writeAttachments(&pc, lineSplitterBuilder{}); ( err != nil) != tt.wantErr {
+				t.Errorf("%q. MailYak.writeAttachments() error = %v", tt.name, err )
+			}
+
+			// Ensure there's an attachment
+			if len(pc.attachments) != 1 {
+				t.Fatalf("%q. MailYak.writeAttachments() unexpected number of attachments = %v, want 1", tt.name, len(pc.attachments))
+			}
+
+			if pc.attachments[0].contentType != tt.ctype {
+				t.Errorf("%q. MailYak.writeAttachments() content type = %v, want %v", tt.name, pc.attachments[0].contentType, tt.ctype)
+			}
+
+			if pc.attachments[0].disposition != tt.disp {
+				t.Errorf("%q. MailYak.writeAttachments() disposition = %v, want %v", tt.name, pc.attachments[0].disposition, tt.disp)
+			}
+
+			scanner := bufio.NewScanner(bytes.NewReader(pc.attachments[0].data.Bytes()))
+			for scanner.Scan() {
+				if len(scanner.Text()) > maxLineLen {
+					t.Errorf("%q. linelength = %d want <= %d\n", tt.name, len(scanner.Text()), maxLineLen)
+				}
+			}
+
+			if pc.attachments[0].data.String() != tt.data {
+				t.Errorf("%q. MailYak.writeAttachments() data = \n%v, want \n%v", tt.name, pc.attachments[0].data.String(), tt.data)
 			}
 		})
 	}
