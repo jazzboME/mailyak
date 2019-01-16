@@ -78,7 +78,7 @@ func (m *MailYak) Send() error {
 }
 
 // SendWithHello is a modified version of mailyak.Send() which supports a hello/helo/ehlo call
-func (m *MailYak) SendWithHello(helobox string) error {
+func (m *MailYak) SendWithHello(heloBox string) error {
 	buf, err := m.buildMime()
 	if err != nil {
 		return err
@@ -90,14 +90,14 @@ func (m *MailYak) SendWithHello(helobox string) error {
 		m.fromAddr,
 		append(append(m.toAddrs, m.ccAddrs...), m.bccAddrs...),
 		buf.Bytes(),
-		helobox,
+		heloBox,
 	)
 }
 // sendMail attempts to provide a more featureful version of the Send command
 //
 // Goal is to allow low level adjustments, such as setting the HELO response. 
 // n.b. silently ignores AUTH right now, nor does TLS.
-func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte, helobox string) error {
+func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte, heloBox string) error {
 	if err := validateLine(from); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte, he
 		return err
 	}
 	defer client.Close()
-	err = client.Hello(helobox)
+	err = client.Hello(heloBox)
 	if err != nil {
 		return err
 	}
